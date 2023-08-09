@@ -1,0 +1,15 @@
+build/
+data/
+howdesbt/
+download.sh
+*.needle
+*.fasta
+*.fna
+*.bin
+*.bin
+*.jf
+*.fastq
+*.fastq
+*.fasta
+*.o
+*.so
