@@ -83,50 +83,35 @@ public:
 
     s_type getMeanSig(size_t node) { return &means[node * signatureSize]; }
 
-    void testNode(size_t node, FILE *pFile)
-    {
-        size_t childCount = childCounts[node];
-        string node_type = "leaf";
-        if (isRootNode[node])
-        {
-            node_type = "root";
-        }
-        else if (isSuperNode[node])
-        {
-            node_type = "super";
-        }
-        else if (isBranchNode[node])
-        {
-            node_type = "branch";
-        }
-        else
-        {
-            childCount = matrices[node].size() / signatureSize;
-            if (isAmbiNode[node])
-            {
-                node_type = "ambi";
-            }
-        }
-        printMsg("test_cnt %zu, node %zu\n", test_cnt, node);
-        // string outName = to_string(test_cnt) + "_" + to_string(node) + ".txt";
-        // FILE *pFile = fopen(outName.c_str(), "w");
-        // FILE *pFile = stderr;
-        fprintf(pFile, ">>>node %zu, node_type %s, parent %zu, matrixcount %zu, seqCount %zu, childCount %zu\n",
-                node, node_type.c_str(), parentLinks[node], matrices[node].size(), matrices[node].size() / signatureSize, childCount);
-
-        // toBinaryIdx(pFile, getMeanSig(node));
-        // fprintf(pFile, ">==================\n");
-        // for (size_t i = 0; i < matrices[node].size(); i += signatureSize)
-        // {
-        //     fprintf(pFile, "(%zu)\t", i / signatureSize);
-        //     toBinaryIdx(pFile, &matrices[node][i]);
-        // }
-        // fprintf(pFile, "===================\n");
-    }
-
     inline bool isSingleton(size_t child)
     {
         return matrices[child].size() == signatureSize;
+    }
+
+    void testNode(size_t node)
+    {
+        printMsg("test_cnt %zu, node %zu\n", test_cnt, node);
+        string outName = to_string(test_cnt) + ".txt";
+        FILE *pFile = fopen(outName.c_str(), "w");
+        fprintf(pFile, ">>>node %zu, matrix count %zu, seqCount %zu\n", node, matrices[node].size(), matrices[node].size() / signatureSize);
+        toBinaryIdx(pFile, getMeanSig(node));
+        fprintf(pFile, ">==================\n");
+        for (size_t i = 0; i < matrices[node].size(); i += signatureSize)
+        {
+            fprintf(pFile, "(%zu)\t", i / signatureSize);
+            toBinaryIdx(pFile, &matrices[node][i]);
+        }
+        fprintf(pFile, "===================\n");
+        test_cnt++;
+    }
+
+    void testing(size_t node)
+    {
+        testNode(node);
+        for (size_t child : childLinks[node])
+        {
+            testing(child);
+        }
     }
 
     void readNodeSig(size_t parent, size_t child, const char *binFile)
@@ -170,7 +155,7 @@ public:
         size_t end = start + signatureSize;
         if (end > matrices[node].size())
         {
-            printMsg("Error deleting sig %zu from node %zu (%zu>%zu-1)\n", idx, node, end, matrices[node].size());
+            printMsg("Error deleting sig %zu from node %zu (%zu>%zu-1)\n", idx, node, end,  matrices[node].size());
         }
         matrices[node].erase(matrices[node].begin() + start, matrices[node].begin() + end);
     }
@@ -352,15 +337,6 @@ public:
         // preload sig into matrices to check for priority
         sVec_type temp_matrix = matrices[ambi];
         temp_matrix.insert(temp_matrix.end(), signature, signature + signatureSize);
-
-        return calcAvgSim(temp_matrix);
-    }
-
-    double preloadPriority(size_t ambi, sVec_type signatures)
-    {
-        // preload sig into matrices to check for priority
-        sVec_type temp_matrix = matrices[ambi];
-        insertVecRange(temp_matrix, signatures);
 
         return calcAvgSim(temp_matrix);
     }
