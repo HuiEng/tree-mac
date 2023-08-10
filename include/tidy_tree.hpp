@@ -854,52 +854,38 @@ public:
         return worst_sibling;
     }
 
-    inline size_t insertAmbi(const_s_type signature, vector<size_t> &insertionList, size_t idx, size_t branch, size_t singleton_leaf)
+    inline size_t insertAmbi(const_s_type signature, vector<size_t> &insertionList, size_t idx, size_t branch)
     {
 
         if (ambiLinks[branch].size() == 0)
         {
-            if (childCounts[branch] > 1 && isAllSingle(branch))
-            {
-                size_t temp = createNode(signature, insertionList, branch, idx);
-                pickAmbi(branch);
-                return temp;
-            }
             return createAmbiNode(signature, insertionList, branch, idx);
         }
-
-        printMsg("InsertAmbi %zu\n", branch);
 
         size_t dest = 0;
         size_t ambi_split = 0;
         for (size_t ambi : ambiLinks[branch])
         {
-            // // preload sig into matrices to check for priority
-            // addSigToMatrix(ambi, signature);
-            // updatePriority(ambi);
-            // // release preloaded matrix
-            // matrices[ambi].pop_back();
+            // preload sig into matrices to check for priority
+            addSigToMatrix(ambi, signature);
+            updatePriority(ambi);
+            // release preloaded matrix
+            matrices[ambi].pop_back();
 
-            double preload_priority = preloadPriority(ambi, signature);
+            printMsg(">>ambi %zu, %.2f\n", ambi, priority[ambi]);
 
-            printMsg(">>ambi %zu, %.2f\n", ambi, preload_priority);
-
-            if (preload_priority >= stay_threshold)
+            if (priority[ambi] >= stay_threshold)
             {
                 dest = stayNode(signature, insertionList, idx, ambi);
+                printMsg("@@ambi %zu, %.2f\n", dest, priority[ambi]);
                 isAmbiNode[dest] = 0;
                 updateParentMean(dest);
-                printMsg("@@ambi %zu, %.2f\n", dest, priority[ambi]);
-
                 //? also remove from ambi link;
                 // ambiLinks[branch].clear();
                 removeVecValue(ambiLinks[branch], ambi);
-
-                singleToAmbi(branch);
-                updateParentMean(branch);
                 return dest;
             }
-            else if (preload_priority < split_threshold)
+            else if (priority[ambi] < split_threshold)
             {
                 ambi_split++;
             }
@@ -908,15 +894,6 @@ public:
                 dest = ambi;
             }
         }
-
-        // if (singleton_leaf != 0 && dest != 0 && !isSingleton(dest))
-        // {
-        //     // bad branch
-        //     printMsg("Bad Branch %zu, ambi %zu\n", branch, dest);
-        //     isAmbiNode[dest] = 0;
-        //     updateParentMean(dest);
-        //     removeVecValue(ambiLinks[branch], dest);
-        // }
 
         if (ambi_split == ambiLinks[branch].size())
         {
@@ -933,8 +910,6 @@ public:
     // else create new ambi
     inline size_t insertBranch(const_s_type signature, vector<size_t> &insertionList, size_t idx, size_t branch)
     {
-        size_t singleton_leaf = 0;
-        size_t non_singleton_leaf_cnt = 0;
         double max_similarity = stay_threshold;
         size_t dest = 0;
         for (size_t child : childLinks[branch])
@@ -946,17 +921,6 @@ public:
                 max_similarity = similarity;
                 dest = child;
             }
-            if (!isAmbiNode[child])
-            {
-                if (isSingleton(child))
-                {
-                    singleton_leaf = child;
-                }
-                else
-                {
-                    non_singleton_leaf_cnt++;
-                }
-            }
         }
 
         if (dest != 0)
@@ -967,18 +931,11 @@ public:
                 isAmbiNode[dest] = 0;
                 updateParentMean(dest);
                 removeVecValue(ambiLinks[branch], dest);
-                singleToAmbi(branch);
-                updateParentMean(branch);
             }
             return dest;
         }
 
-        if (non_singleton_leaf_cnt > 0)
-        {
-            singleton_leaf = 0;
-        }
-
-        return insertAmbi(signature, insertionList, idx, branch, singleton_leaf);
+        return insertAmbi(signature, insertionList, idx, branch);
     }
 
     // find best leaf from the NN branches, if dest = 0, create new node
@@ -1538,33 +1495,33 @@ public:
 
     inline void mergeStayBranch(tt_data &dt)
     {
-        if (dt.stay_branch.size() > 1)
-        {
-            printMsg("merging stay branch\n");
-            // printTreeJson(stderr, parentLinks[dt.dest_branch]);
-            for (size_t b : dt.stay_branch)
-            {
-                if (b == dt.dest_branch)
-                {
-                    continue;
-                }
-                for (size_t child : childLinks[b])
-                {
-                    moveParent(child, dt.dest_branch, false);
-                    if (isAmbiNode[child])
-                    {
-                        ambiLinks[dt.dest_branch].push_back(child);
-                    }
-                }
-                deleteNode(b);
-                clearNode(b);
-            }
-            updateParentMean(dt.dest_branch);
-            dt.stay_branch.clear();
-            dt.stay_branch.push_back(dt.dest_branch);
+        // if (dt.stay_branch.size() > 1)
+        // {
+        //     printMsg("merging stay branch\n");
+        //     // printTreeJson(stderr, parentLinks[dt.dest_branch]);
+        //     for (size_t b : dt.stay_branch)
+        //     {
+        //         if (b == dt.dest_branch)
+        //         {
+        //             continue;
+        //         }
+        //         for (size_t child : childLinks[b])
+        //         {
+        //             moveParent(child, dt.dest_branch, false);
+        //             if (isAmbiNode[child])
+        //             {
+        //                 ambiLinks[dt.dest_branch].push_back(child);
+        //             }
+        //         }
+        //         deleteNode(b);
+        //         clearNode(b);
+        //     }
+        //     updateParentMean(dt.dest_branch);
+        //     dt.stay_branch.clear();
+        //     dt.stay_branch.push_back(dt.dest_branch);
 
-            // printTreeJson(stderr, parentLinks[dt.dest_branch]);
-        }
+        //     // printTreeJson(stderr, parentLinks[dt.dest_branch]);
+        // }
     }
 
     // relocate stay (level 1, default) or nn leaf (level 2) to stay branch, or else stay super, or else nn branch
@@ -1661,14 +1618,14 @@ public:
             break;
         case 3:
             printMsg(">>Stat>> Stay Branch\n");
-            // if (dt.stay_branch.size() > 1)
-            // {
-            //     if (isRootNode[node] || dt.mismatch > 0)
-            //     {
-            //         t_parent = createSuper(node, insertionList, dt.stay_branch);
-            //         recluster(t_parent);
-            //     }
-            // }
+            if (dt.stay_branch.size() > 1)
+            {
+                if (isRootNode[node] || dt.mismatch > 0)
+                {
+                    t_parent = createSuper(node, insertionList, dt.stay_branch);
+                    recluster(t_parent);
+                }
+            }
             mergeStayBranch(dt);
             return insertBranch(signature, insertionList, idx, dt.dest_branch);
             break;
@@ -1808,20 +1765,20 @@ public:
         {
             printMsg(">>Stat>> NN Leaf and NN Branch\n");
 
-            if (dt.nn_branch.size() == 1)
-            {
-                t_parent = dt.nn_branch[0];
-                for (size_t child : dt.nn_leaf)
-                {
-                    moveParent(child, t_parent);
-                    if (isSingleton(child))
-                    {
-                        isAmbiNode[child] = 1;
-                        ambiLinks[t_parent].push_back(child);
-                    }
-                }
-                return insertBranch(signature, insertionList, idx, t_parent);
-            }
+            // if (dt.nn_branch.size() == 1)
+            // {
+            //     t_parent = dt.nn_branch[0];
+            //     for (size_t child : dt.nn_leaf)
+            //     {
+            //         moveParent(child, t_parent);
+            //         if (isSingleton(child))
+            //         {
+            //             isAmbiNode[child] = 1;
+            //             ambiLinks[t_parent].push_back(child);
+            //         }
+            //     }
+            //     return insertBranch(signature, insertionList, idx, t_parent);
+            // }
 
             t_parent = doTarget_candidates(dt, node, dt.nn_leaf, insertionList, 2);
 
