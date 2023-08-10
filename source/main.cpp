@@ -1,6 +1,7 @@
 #include <fstream>
 #include <random>
 #include <iostream>
+#include <cstring>
 // #include "minimiser.hpp"
 // #include "bf_ktree.hpp"
 // #include "bloom_filter.hpp"

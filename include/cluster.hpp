@@ -1,5 +1,6 @@
 #ifndef INCLUDE_CLUSTER_HPP
 #define INCLUDE_CLUSTER_HPP
+#include <omp.h>
 using namespace std;
 
 bool random_ = false;
@@ -69,21 +70,6 @@ string setArgs(cmdline_type args)
         skip_ = true;
         fprintf(stderr, "Skip inital tree construction, thresholds have no use\n");
     }
-    // else if (args.single_arg)
-    // {
-    //     if (args.multiple_arg)
-    //     {
-    //         split_threshold = getSplitThresholdListSingle(inputFile);
-    //     }
-    //     else
-    //     {
-    //         split_threshold = getSplitThresholdSingle(inputFile);
-    //     }
-    // }
-    // else
-    // {
-    //     split_threshold = getSplitThreshold(inputFile, args.multiple_arg);
-    // }
 
     split_node_threshold = split_threshold / 2;
 
@@ -469,7 +455,7 @@ vector<size_t> clusterSignatures(const vector<signature_type> &seqs, size_t seqC
     {
         tree.printTreeJson(stdout);
     }
-
+// tree.printTreeJson(stdout);
     // Recursively destroy all locks
     tree.destroyLocks();
     return clusters;

@@ -83,12 +83,6 @@ public:
 
     s_type getMeanSig(size_t node) { return &means[node * signatureSize]; }
 
-    // check if first child of branch is a singleton
-    inline bool isSingleton(size_t child)
-    {
-        return matrices[child].size() == signatureSize;
-    }
-
     void testNode(size_t node, FILE *pFile)
     {
         size_t childCount = childCounts[node];
@@ -130,6 +124,10 @@ public:
         // fprintf(pFile, "===================\n");
     }
 
+    inline bool isSingleton(size_t child)
+    {
+        return matrices[child].size() == signatureSize;
+    }
 
     void readNodeSig(size_t parent, size_t child, const char *binFile)
     {
@@ -354,6 +352,15 @@ public:
         // preload sig into matrices to check for priority
         sVec_type temp_matrix = matrices[ambi];
         temp_matrix.insert(temp_matrix.end(), signature, signature + signatureSize);
+
+        return calcAvgSim(temp_matrix);
+    }
+
+    double preloadPriority(size_t ambi, sVec_type signatures)
+    {
+        // preload sig into matrices to check for priority
+        sVec_type temp_matrix = matrices[ambi];
+        insertVecRange(temp_matrix, signatures);
 
         return calcAvgSim(temp_matrix);
     }

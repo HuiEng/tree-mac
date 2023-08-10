@@ -227,6 +227,31 @@ double calcMatchingWindows(seq_type a, seq_type b)
     return match / max(a.size(), b.size());
 }
 
+
+double calcMatchingWindowsByScore(seq_type a, seq_type b, double local_window_match_score)
+{
+    double match = 0;
+    // treat tail subseq as mismatch
+    for (int w = 0; w < min(a.size(), b.size()); w++)
+    {
+        size_t c = calcSingleInter(a[w], b[w]);
+        double n = max(countSingleSetBits(a[w]),countSingleSetBits(b[w]));
+
+        if (c/n >= local_window_match_score)
+        {
+            match++;
+        }
+        else if (c > 0)
+        {
+            if (c == calcSingleUnion(a[w], b[w]))
+            {
+                match++;
+            }
+        }
+    }
+    return match / max(a.size(), b.size());
+}
+
 //?
 double calcMatchingMinimisers(seq_type a, seq_type b)
 {

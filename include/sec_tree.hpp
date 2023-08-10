@@ -28,7 +28,7 @@ s_type createMeanSig(sVec_type clusterSigs)
     {
         return clusterSigs[0];
     }
-    
+
     // find the smallest windows count
     size_t winNum = clusterSigs[0].size();
     for (s_type matrix : clusterSigs)
@@ -87,12 +87,6 @@ public:
 
     s_type getMeanSig(size_t node) { return means[node]; }
 
-    // check if first child of branch is a singleton
-    inline bool isSingleton(size_t child)
-    {
-        return matrices[child].size() == 1;
-    }
-
     void testNode(size_t node, FILE *pFile)
     {
         size_t childCount = childCounts[node];
@@ -130,6 +124,11 @@ public:
         //     dbgPrintSignatureIdx(pFile, matrices[node][i]);
         // }
         // fprintf(pFile, "===================\n");
+    }
+
+    inline bool isSingleton(size_t child)
+    {
+        return matrices[child].size() == 1;
     }
 
     const_s_type readInput(const char *inputFile)
@@ -336,6 +335,18 @@ public:
         // preload sig into matrices to check for priority
         sVec_type temp_matrix = matrices[ambi];
         temp_matrix.push_back(signature);
+
+        return calcAvgSim(temp_matrix);
+    }
+
+    double preloadPriority(size_t ambi, sVec_type signatures)
+    {
+        // preload sig into matrices to check for priority
+        sVec_type temp_matrix = matrices[ambi];
+        for (const_s_type signature : signatures)
+        {
+            temp_matrix.push_back(signature);
+        }
 
         return calcAvgSim(temp_matrix);
     }
