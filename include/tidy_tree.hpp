@@ -110,7 +110,11 @@ public:
 
     virtual s_type getMeanSig(size_t node) { return returnEmpy<s_type>(); }
 
-    virtual inline bool isSingleton(size_t child) { return false; }
+    // virtual inline bool isSingleton(size_t child) { return false; }
+    inline bool isSingleton(size_t child)
+    {
+        return matrices[child].size() == 1;
+    }
 
     virtual void updateMeanSig(size_t node, const_s_type signature) {}
 
