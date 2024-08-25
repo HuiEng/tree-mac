@@ -65,16 +65,7 @@ size_t calcHDBF(const cell_type *a, const cell_type *b, size_t signatureSize)
    return c;
 }
 
-// Jaccard similarity
-double calcSimilarity(const cell_type *a, const cell_type *b, size_t signatureSize)
-{
-   double i = BFintersect(a, b, signatureSize);
-   double u = BFunion(a, b, signatureSize);
 
-   double similarity = i / u;
-   // fprintf(stdout,"--%f,%f,%f\n",u,i,similarity);
-   return similarity;
-}
 
 size_t countSetBits(const cell_type *a, size_t signatureSize)
 {
@@ -86,6 +77,28 @@ size_t countSetBits(const cell_type *a, size_t signatureSize)
    return c;
 }
 
+size_t countMinSetBits(const cell_type *a, const cell_type *b, size_t signatureSize)
+{
+   size_t c1 = 0, c2 = 0;
+   for (size_t i = 0; i < signatureSize; i++)
+   {
+      c1 += __builtin_popcountll(a[i]);
+      c2 += __builtin_popcountll(b[i]);
+   }
+   return std::min(c1, c2);
+}
+
+
+double calcSimilarity(const cell_type *a, const cell_type *b, size_t signatureSize)
+{
+   double i = BFintersect(a, b, signatureSize);
+   double u = BFunion(a, b, signatureSize); // Jaccard similarity
+   // double u = countMinSetBits(a, b, signatureSize); 
+
+   double similarity = i / u;
+   // fprintf(stdout,"--%f,%f,%f\n",u,i,similarity);
+   return similarity;
+}
 
 // find the number of overlapping bits divide by the number of bits inthe refer_sig
 double calcOverlap(const cell_type *query_sig, const cell_type *refer_sig, size_t signatureSize)
@@ -94,7 +107,6 @@ double calcOverlap(const cell_type *query_sig, const cell_type *refer_sig, size_
    double n = countSetBits(refer_sig, signatureSize);
    return i / n;
 }
-
 
 static const std::size_t bits_per_char = 0x08; // 8 bits in 1 char(unsigned)
 

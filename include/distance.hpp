@@ -227,30 +227,29 @@ double calcMatchingWindows(seq_type a, seq_type b)
     return match / max(a.size(), b.size());
 }
 
-
-double calcMatchingWindowsByScore(seq_type a, seq_type b, double local_window_match_score)
-{
-    double match = 0;
-    // treat tail subseq as mismatch
-    for (int w = 0; w < min(a.size(), b.size()); w++)
-    {
-        size_t c = calcSingleInter(a[w], b[w]);
-        double n = max(countSingleSetBits(a[w]),countSingleSetBits(b[w]));
-
-        if (c/n >= local_window_match_score)
-        {
-            match++;
-        }
-        else if (c > 0)
-        {
-            if (c == calcSingleUnion(a[w], b[w]))
-            {
-                match++;
-            }
-        }
-    }
-    return match / max(a.size(), b.size());
-}
+// double calcMatchingWindows(seq_type a, seq_type b)
+// {
+//     vector<size_t> match(min(a.size(), b.size()));
+// // treat tail subseq as mismatch
+// #pragma omp parallel for
+//     for (int w = 0; w < match.size(); w++)
+//     {
+//         size_t c = calcSingleInter(a[w], b[w]);
+//         if (c >= minimiser_match_threshold)
+//         {
+//             match[w] = 1;
+//         }
+//         else if (c > 0)
+//         {
+//             if (c == calcSingleUnion(a[w], b[w]))
+//             {
+//                 match[w] = 1;
+//             }
+//         }
+//     }
+//     double match_cnt = std::reduce(match.begin(), match.end());
+//     return match_cnt / max(a.size(), b.size());
+// }
 
 //?
 double calcMatchingMinimisers(seq_type a, seq_type b)
@@ -287,6 +286,12 @@ double calcJaccardLocalWrap(seq_type shorter, seq_type longer)
         {
             break;
         }
+    }
+
+    // align from front
+    if (start == shorter.size())
+    {
+        start = 0;
     }
     double jaccard = 0;
     // treat tail subseq as mismatch

@@ -9,7 +9,16 @@
 // #include "bf/object.hpp"
 
 // #include "bf/all.hpp"
-// using namespace bf;
+using namespace std;
+
+#ifndef GIT_BRANCH
+#define GIT_BRANCH "?"
+#endif
+#ifndef GIT_COMMIT_HASH
+#define GIT_COMMIT_HASH "?"
+#endif
+string commit_branch = GIT_BRANCH;
+string commit_hash = GIT_COMMIT_HASH;
 
 static size_t kmerLength = 4;   // Kmer length
 static size_t windowLength = 8; // window length
@@ -17,6 +26,7 @@ static size_t windowLength = 8; // window length
 typedef int(main_func_t)(int argc, char *argv[]);
 main_func_t tree_main;
 main_func_t primary_tree_main;
+main_func_t test_main;
 main_func_t sos;
 
 struct cmd_func
@@ -28,7 +38,7 @@ struct cmd_func
 cmd_func cmd_list[] = {
     {"tree", &tree_main},
     {"prim", &primary_tree_main},
-
+    {"test", &test_main},
 
     /* help in all its form. Must be first non-command */
     {"help", &sos},
@@ -59,10 +69,11 @@ int sos(int argc, char *argv[])
   return 0;
 }
 
-
 int main(int argc, char *argv[])
 {
 
+  fprintf(stderr, "current branch: %s \n", commit_branch.c_str());
+  fprintf(stderr, "current commit: %s \n", commit_hash.c_str());
   std::string error;
 
   if (argc < 2)

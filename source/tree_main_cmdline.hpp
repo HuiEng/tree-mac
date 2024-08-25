@@ -368,6 +368,8 @@ public:
   size_t iteration_arg;
   size_t method_arg;
   unsigned seed_arg;
+  size_t singleton_arg;
+  size_t kMean_seed_arg;
   size_t tree_order_arg;
 
   bool input_given;
@@ -376,8 +378,10 @@ public:
   bool capacity_given;
   bool sizeCap_given;
   bool random_arg;
+  bool updateAll_arg;
   bool topology_in_given;
   bool topology_out_given;
+  bool print_tree_given;
   bool split_threshold_given;
   bool stay_threshold_given;
   bool debug_arg;
@@ -389,6 +393,7 @@ public:
   bool single_arg;
   bool skip_arg;
   bool method_given;
+  bool singleton_given;
 
   enum
   {
@@ -401,12 +406,13 @@ public:
                         minimiser_match_arg(0), capacity_arg(0), sizeCap_arg(0), method_arg(0),
                         input_given(false), single_arg(false), skip_arg(false), method_given(false),
                         minimiser_match_given(false), capacity_given(false), sizeCap_given(false),
-                        random_arg(false), iteration_arg(0), seed_arg(0),
+                        random_arg(false),updateAll_arg(false), iteration_arg(0), seed_arg(0), singleton_arg(0), kMean_seed_arg(0),
                         topology_in_given(false), topology_in_arg(""),
                         topology_out_given(false), topology_out_arg(""),
+                        print_tree_given(false),
                         split_threshold_given(false), split_threshold_arg(0),
                         stay_threshold_given(false), stay_threshold_arg(0), tree_order_given(false),
-                        debug_arg(false), print_arg(false), force_split_arg(false),
+                        debug_arg(false), print_arg(false), force_split_arg(false),singleton_given(false),
                         iteration_given(false), multiple_arg(false)
   {
   }
@@ -415,12 +421,13 @@ public:
                                               minimiser_match_arg(0), capacity_arg(0), sizeCap_arg(0), method_arg(0),
                                               input_given(false), single_arg(false), skip_arg(false), method_given(false),
                                               minimiser_match_given(false), capacity_given(false), sizeCap_given(false),
-                                              random_arg(false), iteration_arg(0), seed_arg(0),
+                                              random_arg(false),updateAll_arg(false), iteration_arg(0), seed_arg(0),singleton_arg(0),kMean_seed_arg(0),
                                               topology_in_given(false), topology_in_arg(""),
                                               topology_out_given(false), topology_out_arg(""),
+                                              print_tree_given(false),
                                               split_threshold_given(false), split_threshold_arg(0),
                                               stay_threshold_given(false), stay_threshold_arg(0), tree_order_given(false),
-                                              debug_arg(false), print_arg(false), force_split_arg(false),
+                                              debug_arg(false), print_arg(false), force_split_arg(false),singleton_given(false),
                                               iteration_given(false), multiple_arg(false)
   {
     parse(argc, argv);
@@ -440,14 +447,15 @@ public:
         {"split", 1, 0, 'L'},
         {"stay", 1, 0, 'S'},
         {"random", 1, 0, 'R'},
-        {"iteration", 0, 0, 'I'},
+        {"iteration", 1, 0, 'I'},
+        {"singleton", 1, 0, 'Z'},
         {"topology_in", 1, 0, 'q'},
         {"topology_out", 1, 0, 'w'},
         {"help", 0, 0, 'h'},
         {"usage", 0, 0, USAGE_OPT},
         {"version", 0, 0, 'V'},
         {0, 0, 0, 0}};
-    static const char *short_options = "hVi:o:c:C:R:dfI:q:w:sS:L:m:T:pfF:M";
+    static const char *short_options = "hVi:o:c:C:R:dfI:q:Ww:sS:L:m:T:pfF:MZ:Ak:";
 
     ::std::string err;
 #define CHECK_ERR(type, val, which)                                                      \
@@ -513,6 +521,9 @@ public:
         topology_out_given = true;
         topology_out_arg = optarg;
         break;
+      case 'W':
+        print_tree_given = true;
+        break;
       case 's':
         skip_arg = true;
         break;
@@ -553,10 +564,22 @@ public:
         seed_arg = conv_uint<unsigned>((const char *)optarg, err, false);
         CHECK_ERR(size_t, optarg, "-R=unsigned")
         break;
+      case 'A':
+        updateAll_arg = true;
+        break;
       case 'I':
         iteration_given = true;
         iteration_arg = conv_uint<size_t>((const char *)optarg, err, false);
         CHECK_ERR(size_t, optarg, "-I, --iteration=size_t")
+        break;
+      case 'Z':
+        singleton_given = true;
+        singleton_arg = conv_uint<size_t>((const char *)optarg, err, false);
+        CHECK_ERR(size_t, optarg, "-Z, --singleton=size_t")
+        break;
+      case 'k':
+        kMean_seed_arg = conv_uint<size_t>((const char *)optarg, err, false);
+        CHECK_ERR(size_t, optarg, "-k, --kMean_seed_arg=size_t")
         break;
       case 'M':
         multiple_arg = true;
@@ -634,6 +657,7 @@ public:
            " -m,                                      read method, see code for details [default = 0]\n"
            " -F,                                      force split root [default=false]\n"
            " -f,                                      tree order force split root [default=5]\n"
+           " -A                                       udpate super with matrix [default=FALSE]"
            " -i, --input                              input file or folder\n"
            " -M                                       input is a folder"
            " -T, --tag                                [optional] tag for output cluster file\n"
@@ -642,11 +666,14 @@ public:
            " -c, --size_cap                           Only cluster the first c seqs [default=10000]\n"
            " -q, --topology_in                        Read tree topology from this folder [must end with '/']\n"
            " -w, --topology_out                       Print tree topology into this folder [must end with '/']\n"
+           " -W,                                      Print final tree JSON to stdout [default=false] \n"
            " -s, --skip                               skip to reinsertion step, must use with -q\n"
            " -L, --split                              split node if HD >= signature length * split_threshold [default=1]\n"
            " -S, --stay                               stay in node if HD <= signature length * stay_threshold [default=0]\n"
            " -R,                                      inserting seqs in random order [defalut seed=0]\n"
            " -I, --iteration                          number or reinsertion [default=0]\n"
+           " -Z, --singleton                          min cluster size [default=1]\n"
+           " -k, --kMean_seed                         seed for kmeans random centroids [default=0, random]\n"
            "     --usage                              Usage\n"
            " -h, --help                               This message\n"
            " -V, --version                            Version";

@@ -50,7 +50,7 @@ int primary_tree_main(int argc, char *argv[])
     }
 
     fprintf(stderr, "Loaded %zu seqs...signatureSize %zu\n", seqCount, signatureSize);
-    clusters = clusterSignatures<primary_tree_type, cell_type>(seqs, seqCount, signatureSize);
+    clusters = clusterSignatures<primary_tree_type, cell_type>(seqs, seqCount);
 
     fprintf(stderr, "writing output...\n");
     FILE *pFile = fopen(outName.c_str(), "w");

@@ -18,6 +18,7 @@ struct tree_meta_st
     bool writeTree_ = false;
     const char *inputTreePath;
     const char *outputTreePath;
+    bool writeJSON = false;
 };
 
 tree_meta_st tree_meta;
@@ -27,7 +28,7 @@ string setArgs(cmdline_type args)
 {
     split_threshold = 0.5;
     stay_threshold = 0.8;
-    minimiser_match_threshold = 4;
+    minimiser_match_threshold = 3;
 
     //?
     if (!args.input_given)
@@ -38,7 +39,19 @@ string setArgs(cmdline_type args)
 
     string inputFile = args.input_arg;
 
-    if (args.skip_arg)
+    // if (args.skip_arg)
+    // {
+    //     skip_ = true;
+    //     fprintf(stderr, "Skip inital tree construction, thresholds have no use\n");
+    // }
+
+    if (args.singleton_given)
+    {
+        singleton = args.singleton_arg;
+        fprintf(stderr, "Min cluster size = %zu\n", singleton);
+    }
+
+    if (args.topology_in_given && !args.topology_out_given)
     {
         skip_ = true;
         fprintf(stderr, "Skip inital tree construction, thresholds have no use\n");
@@ -65,10 +78,24 @@ string setArgs(cmdline_type args)
     {
         split_threshold = args.split_threshold_arg;
     }
-    else if (args.skip_arg)
+    else if (args.topology_in_given)
     {
-        skip_ = true;
-        fprintf(stderr, "Skip inital tree construction, thresholds have no use\n");
+        // continue;
+    }
+    else if (args.single_arg)
+    {
+        if (args.multiple_arg)
+        {
+            split_threshold = getSplitThresholdListSingle(inputFile);
+        }
+        else
+        {
+            split_threshold = getSplitThresholdSingle(inputFile);
+        }
+    }
+    else
+    {
+        split_threshold = getSplitThreshold(inputFile, args.multiple_arg);
     }
 
     split_node_threshold = split_threshold / 2;
@@ -93,7 +120,10 @@ string setArgs(cmdline_type args)
 
     debug_ = args.debug_arg;
     print_ = args.print_arg;
+    updateAll_ = args.updateAll_arg;
     force_split_ = args.force_split_arg;
+    kMean_seed = args.kMean_seed_arg;
+    fprintf(stderr, "kMean_seed: %zu\n", kMean_seed);
     if (args.tree_order_given)
     {
         tree_order = args.tree_order_arg;
@@ -104,6 +134,7 @@ string setArgs(cmdline_type args)
     tree_meta.writeTree_ = args.topology_out_given;
     tree_meta.inputTreePath = args.topology_in_arg;
     tree_meta.outputTreePath = args.topology_out_arg;
+    tree_meta.writeJSON = args.print_tree_given;
 
     size_t firstindex = inputFile.find_last_of("/") + 1;
     size_t lastindex = inputFile.find_last_of(".");
@@ -119,59 +150,121 @@ string setArgs(cmdline_type args)
 }
 
 template <typename tree_type>
+size_t loadSeqIDs(const string folder, tree_type &tree)
+{
+    string s;
+    size_t leaves = 0;
+    size_t leaf = 0;
+    string delimiter = ",";
+
+    // Read from the text file
+    ifstream listStream((folder + "clusters.txt").c_str());
+
+    while (getline(listStream, s))
+    {
+
+        size_t pos = s.find(">");
+        string node = s.substr(0, pos);
+        sscanf(node.c_str(), "%zu", &leaf);
+        s.erase(0, pos + 1);
+        string seqIDStr = "";
+        size_t seqID = 0;
+        set<size_t> parents;
+        while ((pos = s.find(delimiter)) != string::npos)
+        {
+            seqIDStr = s.substr(0, pos);
+            sscanf(seqIDStr.c_str(), "%zu", &seqID);
+            s.erase(0, pos + 1);
+
+            tree.seqIDs[leaf].push_back(seqID);
+        }
+
+        size_t parent = tree.parentLinks[leaf];
+        parents.insert(parent);
+
+        if (tree.nodeType[leaf] != AMBI_T)
+        {
+            tree.nodeType[leaf] = LEAF_T;
+            // tree.readNodeMatrix(leaf, (folder + "m-" + to_string(leaf) + ".bin").c_str());
+            for (size_t i : tree.seqIDs[leaf])
+            {
+                tree.addSigToMatrix(leaf, tree.getSeq(i));
+            }
+            tree.updateNodeMean(leaf);
+        }
+        tree.addSigToMatrix(parent, tree.getSeq(tree.seqIDs[leaf][0]));
+
+        do
+        {
+            set<size_t> parents_temp = parents;
+            parents_temp.erase(0);
+            parents.clear();
+            for (size_t parent : parents_temp)
+            {
+                tree.updateNodeMean(parent);
+                size_t grandparent = tree.parentLinks[parent];
+                tree.addSigToMatrix(grandparent, tree.getMeanSig(parent));
+                parents.insert(grandparent);
+            }
+
+        } while (parents.size() != 0);
+        leaves++;
+    }
+
+    // Close the file
+    listStream.close();
+
+    return leaves;
+}
+
+template <typename tree_type>
 string readTreeLine(string s, string folder, tree_type &tree)
 {
     char node_type = 0;
     size_t parent = 0;
-    double priority = 0;
     size_t child = 0;
     string delimiter = ">";
 
     size_t pos = s.find(delimiter);
     string node = s.substr(0, pos);
-    // sscanf(node.c_str(), "%zu", &parent);
-    // sscanf(node.c_str(), "%d(%lf)", &parent_temp, &priority);
-    // parent = parent_temp;
-    // if (parent_temp < 0)
-    // {
-    //     parent = parent_temp * -1;
-    //     tree.isRootNode[parent] = 1;
-    // }
 
-    sscanf(node.c_str(), "%zu(%lf)%s", &parent, &priority, &node_type);
+    sscanf(node.c_str(), "%zu%s", &parent, &node_type);
     switch (node_type)
     {
     case 'r':
-        tree.isRootNode[parent] = 1;
+        tree.nodeType[parent] = ROOT_T;
         break;
     case 's':
-        tree.isSuperNode[parent] = 1;
+        tree.nodeType[parent] = SUPER_T;
+        break;
+    case 'b':
+        tree.nodeType[parent] = BRANCH_T;
         break;
     default:
         break;
     }
     s.erase(0, pos + 1);
-    // cout << "Node: " << node << endl;
 
     delimiter = ",";
     string childStr = "";
     while ((pos = s.find(delimiter)) != string::npos)
     {
+        bool isAmbi = false;
         childStr = s.substr(0, pos);
+        if (childStr[0] == '-')
+        {
+            isAmbi = true;
+            childStr = s.substr(1, pos - 1);
+        }
         sscanf(childStr.c_str(), "%zu", &child);
-        // cout << "Child: " << childStr << endl;
         s.erase(0, pos + 1);
 
-        // vector<cell_type> signature;
-        // readSignatures((folder + childStr + ".bin"), signature);
-        // tree.readNode(parent, child, &signature[0]);
-        // auto signature = tree.readInput((folder + childStr + ".bin").c_str());
-        // tree.readNode(parent, child, signature, priority);
-        tree.readNode(parent, child, (folder + childStr + ".bin").c_str(), priority);
+        tree.readNode(parent, child);
+        if (isAmbi)
+        {
+            tree.nodeType[child] = AMBI_T;
+        }
     }
-    // tree.updatePriority(parent);
-
-    // return parent;
     return node;
 }
 
@@ -187,17 +280,15 @@ size_t readTree(const string folder, tree_type &tree)
     // read signatureSize
     getline(listStream, line);
 
-    // // use first line to set tree params
-    // tree_type tree(partree_capacity);
-    // getline(listStream, line);
-    // sscanf(line.c_str(), "%zu", &signatureSize);
-    // signatureWidth = signatureSize * sizeof(cell_type);
-    // tree.means.resize(partree_capacity * signatureSize);
-
     // read last nodeIdx
     getline(listStream, line);
     size_t offset = 0;
     sscanf(line.c_str(), "%zu", &offset);
+    if (offset > partree_capacity)
+    {
+        fprintf(stderr, "ERROR: partree_capacity must be greater than %zu\n", offset + 1);
+        exit(1);
+    }
 
     while (getline(listStream, line))
     {
@@ -206,10 +297,8 @@ size_t readTree(const string folder, tree_type &tree)
 
     // Close the file
     listStream.close();
-    // tree.updateTree();
-    // tree.printTreeJson(stdout);
-    // return tree;
 
+    fprintf(stderr, "Loaded %zu nodes\n", offset);
     return offset;
 }
 
@@ -240,6 +329,25 @@ void compressClusterList(vector<size_t> &clusters)
     fprintf(stderr, "Output %zu clusters\n", remap.size());
 }
 
+void groupClusters(vector<size_t> &clusters)
+{
+    unordered_map<size_t, vector<size_t>> clusters_grp;
+    size_t i = 0;
+    for (size_t clus : clusters)
+    {
+        clusters_grp[clus].push_back(i);
+        i++;
+    }
+    for (const auto &p : clusters_grp)
+    {
+        std::cerr << "*" << p.first << "\n";
+        for (auto &f : p.second)
+        {
+            std::cerr << f << '\n';
+        }
+    }
+}
+
 size_t getSingleton(vector<size_t> &clusters)
 {
     unordered_map<size_t, size_t> remap;
@@ -268,20 +376,9 @@ size_t getSingleton(vector<size_t> &clusters)
     return p->second;
 }
 
-seq_type getSeq(const vector<seq_type> &seqs, size_t i)
-{
-    return seqs[i];
-}
-
-const cell_type *getSeq(const vector<cell_type> &seqs, size_t i)
-{
-    return &seqs[i];
-}
-
 template <typename tree_type, typename signature_type>
-vector<size_t> clusterSignatures(const vector<signature_type> &seqs, size_t seqCount, size_t mul = 1)
+vector<size_t> clusterSignatures(const vector<signature_type> &seqs, size_t seqCount)
 {
-    // size_t seqCount = seqs.size() / signatureSize;
     vector<size_t> clusters(cap);
 
     size_t firstNodes = 1;
@@ -289,19 +386,22 @@ vector<size_t> clusterSignatures(const vector<signature_type> &seqs, size_t seqC
         firstNodes = seqCount;
 
     size_t offset = 0;
-    default_random_engine rng;
 
-    tree_type tree(partree_capacity);
-    tree.means.resize(partree_capacity * mul);
+    tree_type tree(partree_capacity, seqs);
+    tree.resizeMeans();
 
     if (tree_meta.readTree_)
     {
         offset = readTree(tree_meta.inputTreePath, tree);
+
+        size_t leaves = loadSeqIDs(tree_meta.inputTreePath, tree);
+        fprintf(stderr, "Loaded %zu leaves (& ambis)\n", leaves);
+
         // tree.printTreeJson(stderr);
     }
     offset += firstNodes;
     vector<size_t> insertionList(partree_capacity - offset); // potential nodes idx except root; root is always 0
-    vector<size_t> foo(seqCount);
+    vector<size_t> foo(cap);
 
 // node 0 reserved for root, node 1 reserved for leaves idx
 #pragma omp parallel
@@ -314,7 +414,7 @@ vector<size_t> clusterSignatures(const vector<signature_type> &seqs, size_t seqC
         }
 
 #pragma omp for
-        for (int i = 0; i < seqCount; i++)
+        for (int i = 0; i < cap; i++)
         {
             foo[i] = i;
         }
@@ -325,137 +425,104 @@ vector<size_t> clusterSignatures(const vector<signature_type> &seqs, size_t seqC
         // unsigned seed = chrono::system_clock::now().time_since_epoch().count();
         shuffle(foo.begin(), foo.end(), default_random_engine(seed));
     }
-    foo.resize(cap);
 
-    if (skip_)
+    if (!skip_)
     {
-#pragma omp parallel for
-        for (size_t i = 0; i < cap; i++)
-        {
-            size_t clus = tree.reinsert(getSeq(seqs, i * mul), foo[i]);
-            printMsg("\n Reinsert %zu at %zu\n", foo[i], clus);
-            // clusters[foo[i]] = tree.findAncestor(clus);
-            clusters[foo[i]] = clus;
-        }
-        // tree.removeAmbi();
-        // tree.printTreeJson(stderr);
-    }
-    else
-    {
-
+        clusters[foo[0]] = tree.first_insert(insertionList, foo[0]);
         if (force_split_)
         {
-            for (size_t i = 0; i < cap; i++)
+            for (size_t i = 1; i < cap; i++)
             {
                 printMsg("inserting %zu\n", foo[i]);
-                size_t clus = tree.insertSplitRoot(getSeq(seqs, i * mul), insertionList, foo[i]);
+                size_t clus = tree.insertSplitRoot(insertionList, foo[i]);
                 clusters[foo[i]] = clus;
             }
         }
         else
         {
-            for (size_t i = 0; i < cap; i++)
+            for (size_t i = 1; i < cap; i++)
             {
                 printMsg("inserting %zu\n", foo[i]);
-                size_t clus = tree.insert(getSeq(seqs, i * mul), insertionList, foo[i]);
+                size_t clus = tree.insert(insertionList, foo[i]);
                 clusters[foo[i]] = clus;
             }
         }
 
-        // for debugging
-        if (iteration_given)
+        fprintf(stderr, "Done initial construction\nUsed %zu nodes\n", insertionList.back());
+        fprintf(stderr, "Ignored %zu potential sigs\n", tree.potential_sigs.size());
+        tree.updateTree();
+
+        if (tree_meta.writeTree_)
         {
-            // prep to remove and reinsert ambi
-            // fprintf(stderr, "\n\n\nBefore\n");
-            // tree.printTreeJson(stderr);
-
-            singleton = 0;
-            // tree.trim();
-            tree.removeAmbi();
-            singleton = 1;
-            printMsg("\n\nReinserting ambi (all)\n");
-            tree.prepReinsert();
-
-            if (tree_meta.writeTree_)
-            {
-                // string outFile = tree_meta.outputTreePath;
-                // FILE *tFile = fopen((outFile + "tree.txt").c_str(), "w");
-                tree.printTree(tree_meta.outputTreePath, insertionList);
-            }
-#pragma omp parallel for
-            for (size_t i = 0; i < cap; i++)
-            {
-                size_t clus = tree.reinsert(getSeq(seqs, i * mul), foo[i]);
-                printMsg("\n Reinsert %zu at %zu\n", foo[i], clus);
-                // clusters[foo[i]] = tree.findAncestor(clus);
-                clusters[foo[i]] = clus;
-            }
-
-            // tree.printTreeJson(stderr);
+            tree.printTree(tree_meta.outputTreePath, insertionList);
+            string fileName = tree_meta.outputTreePath;
+            fileName = fileName + "clusters.txt";
+            FILE *cFile = fopen(fileName.c_str(), "w");
+            tree.printLeaves(cFile);
+            fprintf(stderr, "\n\nPrinted initial tree\n");
         }
-        // else if (tree_meta.readTree_)
-        // {
-        //     singleton = 0;
-        //     tree.removeAmbi();
-        // }
     }
-    singleton = 1;
+
+    if (iteration_given)
+    {
+        size_t temp_singleton = singleton;
+        singleton = 0;
+        tree.removeAmbi(insertionList);
+        // tree.removeRedundant();
+        singleton = temp_singleton;
+        printMsg("\n\nReinserting ambi (all)\n");
+        if (updateAll_)
+        {
+            tree.updateAll();
+        }
+        else
+        {
+            tree.prepReinsert();
+        }
+
+#pragma omp parallel for
+        for (size_t i = 0; i < cap; i++)
+        {
+            size_t clus = tree.reinsert(foo[i]);
+            printMsg("\n Reinsert %zu at %zu\n", foo[i], clus);
+            clusters[foo[i]] = clus;
+        }
+    }
 
     for (size_t run = 0; run < iteration; run++)
     {
         if (debug_)
         {
-
-            // singleton = getSingleton(clusters) + 1;
             singleton++;
         }
         fprintf(stderr, "Iteration %zu (singleton = %zu)\n", run, singleton);
 
-        tree.removeAmbi();
-        tree.prepReinsert();
+        tree.removeAmbi(insertionList);
+        // tree.removeRedundant();
+        if (updateAll_)
+        {
+            tree.updateAll();
+        }
+        else
+        {
+            tree.prepReinsert();
+        }
 
-// tree.printTreeJson(stderr);
 #pragma omp parallel for
         for (size_t i = 0; i < cap; i++)
         {
-            size_t clus = tree.reinsert(getSeq(seqs, i * mul), foo[i]);
+            size_t clus = tree.reinsert(foo[i]);
             printMsg("\n found %zu at %zu\n", foo[i], clus);
-            // clusters[foo[i]] = tree.findAncestor(clus);
             clusters[foo[i]] = clus;
         }
-        // if (debug_)
-        // {
-        //     auto fileName = "nodeDistance-r" + to_string((size_t)(run)) + ".txt";
-        //     FILE *nFile = fopen(fileName.c_str(), "w");
-        //     tree.printNodeDistance(nFile, seqs, clusters);
-
-        //     fileName = "clusters-r" + to_string((size_t)(run)) + ".txt";
-        //     FILE *cFile = fopen(fileName.c_str(), "w");
-        //     outputClusters(cFile, clusters);
-        // }
     }
-    tree.updateTree();
 
-    // FILE *pFile = fopen("nodeDistance.txt", "w");
-    // tree.printNodeDistance(pFile, seqs, clusters);
-
-    // tree.printTreeJson(stdout);
-    // FILE *hFile = fopen("hierarchy.txt", "w");
-    // fprintf(hFile, "parent,child,rank\n");
-    // tree.outputHierarchy(hFile);
-
-    // if (tree_meta.writeTree_)
-    // {
-    //     string outFile = tree_meta.outputTreePath;
-    //     FILE *tFile = fopen((outFile + "tree.txt").c_str(), "w");
-    //     tree.printTree(tFile, insertionList, tree_meta.outputTreePath);
-    // }
-
-    if (tree_meta.writeTree_ | tree_meta.readTree_)
+    if (tree_meta.writeTree_ | tree_meta.writeJSON)
     {
+        tree.updateTree();
         tree.printTreeJson(stdout);
     }
-// tree.printTreeJson(stdout);
+
     // Recursively destroy all locks
     tree.destroyLocks();
     return clusters;
