@@ -160,6 +160,18 @@ size_t loadSeqIDs(const string folder, tree_type &tree)
     // Read from the text file
     ifstream listStream((folder + "clusters.txt").c_str());
 
+    // read potential_sigs
+    getline(listStream, s);
+    size_t pos = 0;
+    while ((pos = s.find(delimiter)) != string::npos)
+    {
+        string seqIDStr = s.substr(0, pos);
+        size_t seqID = 0;
+        sscanf(seqIDStr.c_str(), "%zu", &seqID);
+        s.erase(0, pos + 1);
+        tree.potential_sigs.push_back(seqID);
+    }
+
     while (getline(listStream, s))
     {
 
@@ -395,7 +407,7 @@ vector<size_t> clusterSignatures(const vector<signature_type> &seqs, size_t seqC
         offset = readTree(tree_meta.inputTreePath, tree);
 
         size_t leaves = loadSeqIDs(tree_meta.inputTreePath, tree);
-        fprintf(stderr, "Loaded %zu leaves (& ambis)\n", leaves);
+        fprintf(stderr, "Loaded %zu leaves (& ambis); %zu potential_sigs\n", leaves, tree.potential_sigs.size());
 
         // tree.printTreeJson(stderr);
     }
@@ -499,6 +511,16 @@ vector<size_t> clusterSignatures(const vector<signature_type> &seqs, size_t seqC
 
         tree.removeAmbi(insertionList);
         // tree.removeRedundant();
+
+        // if (force_split_)
+        // {
+        //     tree.doSmallLeave_split(insertionList);
+        // }
+        // else
+        // {
+        //     tree.doSmallLeave(insertionList);
+        // }
+
         if (updateAll_)
         {
             tree.updateAll();

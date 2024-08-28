@@ -9,6 +9,7 @@ class tidy_tree
 public:
     size_t root = 0;                   // # of root node
     vector<int> nodeType;              // n entries, is this a branch node
+    vector<size_t> potential_leaves;   // store seqIDs from singleton leaves
     vector<size_t> potential_sigs;     // n entries, is this a branch node
     vector<vector<size_t>> childLinks; // n * o entries, links to children
     vector<vector<size_t>> seqIDs;     // n * o entries, links to children
@@ -22,7 +23,7 @@ public:
     sVec_type seqs;
 
     virtual const_s_type getSeq(size_t i) { return returnEmpy<const_s_type>(); }
-    virtual const_s_type getSeq(sVec_type temp_seqs, size_t i)  { return returnEmpy<const_s_type>(); }
+    virtual const_s_type getSeq(sVec_type temp_seqs, size_t i) { return returnEmpy<const_s_type>(); }
 
     virtual s_type getMeanSig(size_t node) { return returnEmpy<s_type>(); }
 
@@ -334,6 +335,7 @@ public:
         printMatrix(wf, node);
         wf.close();
     }
+
     void printSeqIDbyLeaf(FILE *stream, size_t leaf)
     {
         fprintf(stream, "%zu>", leaf);
@@ -344,7 +346,16 @@ public:
         fprintf(stream, "\n");
     }
 
-    void printLeaves(FILE *stream, size_t node = 0)
+    void printPotentialSigs(FILE *stream)
+    {
+        for (size_t id : potential_sigs)
+        {
+            fprintf(stream, "%zu,", id);
+        }
+        fprintf(stream, "\n");
+    }
+
+    void printLeavesWrap(FILE *stream, size_t node = 0)
     {
 
         for (size_t child : childLinks[node])
@@ -355,9 +366,15 @@ public:
             }
             else
             {
-                printLeaves(stream, child);
+                printLeavesWrap(stream, child);
             }
         }
+    }
+
+    void printLeaves(FILE *stream, size_t node = 0)
+    {
+        printPotentialSigs(stream);
+        printLeavesWrap(stream, node);
     }
 
     void printTree(FILE *stream, string outfolder, size_t node)
@@ -1790,7 +1807,7 @@ public:
             // omp_set_lock(&locks[node]);
             size_t dest = tt(signature, insertionList, idx, node);
             // omp_set_lock(&locks[node]);
-            updateParentMean(dest);
+            // updateParentMean(dest);
             return dest;
         }
 
@@ -1930,14 +1947,12 @@ public:
             for (size_t i = 0; i < clusterCount; i++)
             {
                 double similarity = calcSimilaritySigToNode(child, temp_centroids, i);
-                printMsg("%zu, %f\n", i, similarity);
                 if (similarity > max_similarity)
                 {
                     max_similarity = similarity;
                     dest = i;
                 }
             }
-            printMsg("--- %zu goes to %zu\n", child, dest);
             clusters[dest].push_back(child);
         }
 
@@ -1945,7 +1960,6 @@ public:
         {
             if (cluster.size() <= 1)
             {
-                printMsg("??something is wrong cannot split evenly\n");
                 return 0;
             }
         }
@@ -1963,7 +1977,7 @@ public:
             double max_similarity = 0;
             for (size_t i = 0; i < clusterCount; i++)
             {
-                double similarity = calcSimilarityWrap(getSeq(temp_centroids,i), getSeq(idx));
+                double similarity = calcSimilarityWrap(getSeq(temp_centroids, i), getSeq(idx));
                 if (similarity > max_similarity)
                 {
                     max_similarity = similarity;
@@ -2024,10 +2038,10 @@ public:
             return 0;
         }
 
-        if (seqIDs[node].size() < 10)
-        {
-            return 0;
-        }
+        // if (seqIDs[node].size() < 10)
+        // {
+        //     return 0;
+        // }
 
         if (priority[node] > split_threshold)
         {
@@ -2041,7 +2055,6 @@ public:
             fprintf(stderr, ">> tried splitLeaf %zu\n", node);
             return 0;
         }
-
 
         // do original leaf
         seqIDs[node] = clusters[0];
@@ -2064,6 +2077,10 @@ public:
 
     size_t forceSplitRoot(vector<size_t> &insertionList, size_t node = 0, size_t clusterCount = 2)
     {
+        if (getChildCount(node) <= tree_order)
+        {
+            return 0;
+        }
         vector<vector<size_t>> clusters(clusterCount);
         if (kMeans(node, clusters, clusterCount) == 0)
         {
@@ -2098,10 +2115,7 @@ public:
             node = insert_potential(insertionList, idx, node);
         }
         printMsg("inserted %zu at %zu,%zu\n\n", idx, node);
-        if (getChildCount(root) > tree_order)
-        {
-            forceSplitRoot(insertionList);
-        }
+        forceSplitRoot(insertionList);
         return node;
     }
 
@@ -2437,9 +2451,15 @@ public:
                 }
             }
         }
-        else if (nodeType[node] == AMBI_T || seqIDs[node].size() <= singleton)
+        else if (nodeType[node] == AMBI_T)
         {
             // fprintf(stderr, "*delete %zu,%zu,%zu\n", node, nodeType[node], seqIDs[node].size());
+            deleteNode(node);
+            cleared = node;
+        }
+        else if (seqIDs[node].size() <= singleton)
+        {
+            insertVecRange(potential_leaves, seqIDs[node]);
             deleteNode(node);
             cleared = node;
         }
@@ -2453,6 +2473,26 @@ public:
         {
             clearNode(cleared);
         }
+    }
+
+    void doSmallLeave(vector<size_t> &insertionList)
+    {
+        fprintf(stderr, "doSmallLeave %zu\n", potential_leaves.size());
+        for (size_t i : potential_leaves)
+        {
+            insert(insertionList, i);
+        }
+        potential_leaves.clear();
+    }
+
+    void doSmallLeave_split(vector<size_t> &insertionList)
+    {
+        fprintf(stderr, "doSmallLeave_split %zu\n", potential_leaves.size());
+        for (size_t i : potential_leaves)
+        {
+            insertSplitRoot(insertionList, i);
+        }
+        potential_leaves.clear();
     }
 
     void outputHierarchy(FILE *pFile, size_t node = 0, size_t rank = 0)
