@@ -1,6 +1,7 @@
 build/
 data/
 howdesbt/
+test/
 download.sh
 *.needle
 *.fasta
