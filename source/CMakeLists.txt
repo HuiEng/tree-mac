@@ -8,10 +8,10 @@ project (tree CXX)
 
 # Find OpenMP
 if(APPLE)
-    set(CMAKE_C_COMPILER "/usr/local/Cellar/llvm/16.0.6/bin/clang")
-    set(CMAKE_CXX_COMPILER "/usr/local/Cellar/llvm/16.0.6/bin/clang++")
-    set(OPENMP_LIBRARIES "/usr/local/Cellar/llvm/16.0.6/lib")
-    set(OPENMP_INCLUDES "/usr/local/Cellar/llvm/16.0.6/include")
+    set(CMAKE_C_COMPILER "/usr/local/Cellar/llvm/18.1.8/bin/clang")
+    set(CMAKE_CXX_COMPILER "/usr/local/Cellar/llvm/18.1.8/bin/clang++")
+    set(OPENMP_LIBRARIES "/usr/local/Cellar/llvm/18.1.8/lib")
+    set(OPENMP_INCLUDES "/usr/local/Cellar/llvm/18.1.8/include")
 
     if(CMAKE_C_COMPILER_ID MATCHES "Clang")
         set(OpenMP_C "${CMAKE_C_COMPILER}")
