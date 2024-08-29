@@ -71,23 +71,23 @@ vector<size_t> getIndices(size_t seqCount)
 stats summarise(vector<double> const &v)
 {
     stats st;
-    // if (v.empty())
-    // {
-    //     return st;
-    // }
+    if (v.empty())
+    {
+        return st;
+    }
 
-    // auto const count = static_cast<double>(v.size());
+    auto const count = static_cast<double>(v.size());
 
-    // double sum = accumulate(v.begin(), v.end(), 0.0);
-    // double mean = sum / count;
-    // double max = *max_element(v.begin(), v.end());
+    double sum = accumulate(v.begin(), v.end(), 0.0);
+    double mean = sum / count;
+    double max = *max_element(v.begin(), v.end());
 
-    // vector<double> diff(count);
+    vector<double> diff(count);
     // transform(v.begin(), v.end(), diff.begin(),
     //           bind2nd(minus<double>(), mean));
-    // double sq_sum = inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
-    // double stdev = sqrt(sq_sum / count);
-    // st.update(mean, stdev, max);
+    double sq_sum = inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+    double stdev = sqrt(sq_sum / count);
+    st.update(mean, stdev, max);
 
     // st.printStats();
     return st;

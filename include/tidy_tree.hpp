@@ -150,6 +150,7 @@ public:
         reserve(capacity);
         nodeType[root] = ROOT_T;
         seqs = input_seqs;
+        omp_init_lock(&locks[0]);
     }
 
     void printMatrix(FILE *stream, size_t node)
